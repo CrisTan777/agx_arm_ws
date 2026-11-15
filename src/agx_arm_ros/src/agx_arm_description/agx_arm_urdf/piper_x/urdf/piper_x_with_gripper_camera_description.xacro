@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  PiPER X + AgxGripper + 腕部 DaBai DC1 相机的完整模型。
+  仅用于 RViz 预览 / display.launch.py；MoveIt 请通过
+  agx_arm.urdf.xacro with_camera:=true 组合，避免与 ros2_control 配置分离。
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="piper_x">
+  <xacro:include filename="$(find agx_arm_description)/agx_arm_urdf/piper_x/urdf/piper_x_with_gripper_description.xacro"/>
+  <xacro:include filename="$(find agx_arm_description)/agx_arm_urdf/piper_x/urdf/piper_x_with_camera_description.xacro"/>
+</robot>

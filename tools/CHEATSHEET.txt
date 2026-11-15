@@ -1,0 +1,44 @@
+=== agx_arm 常用命令（当前窗口已 source tools/env.sh）===
+
+-- 状态 --
+  ros2 topic hz /feedback/joint_states
+  ros2 topic echo /feedback/joint_states --once
+  ros2 topic echo /feedback/tcp_pose --once
+  ros2 topic echo /feedback/arm_status --once
+  ros2 control list_controllers
+
+-- MoveIt 规划/执行（默认只规划，加 --execute 才动）--
+  ros2 run piper_x_app moveit_demo home
+  ros2 run piper_x_app moveit_demo home --execute
+  ros2 run piper_x_app moveit_demo joint --values 0.2 0.3 -0.2 0 0.2 0.3 --execute
+  ros2 run piper_x_app moveit_demo pose --xyz 0.2 0 0.35 --rpy 0 90 0
+  ros2 run piper_x_app moveit_demo gripper --width 0.05 --execute
+  ros2 run piper_x_app moveit_demo gripper --width 0.0 --execute
+
+-- 腕部相机（DaBai DC1）--
+  # 只预览模型（不启动真机）
+  ros2 launch agx_arm_description display.launch.py \
+    arm_type:=piper_x effector_type:=agx_gripper with_camera:=true
+  # 工作台默认带相机；不装相机时加 --no-camera
+  bash tools/start_tmux.sh --gripper
+  bash tools/start_tmux.sh --gripper --no-camera
+  # 查看相机 frame
+  ros2 run tf2_ros tf2_echo base_link camera_link
+
+-- 安全 --
+  ros2 service call /emergency_stop std_srvs/srv/Empty
+  ros2 service call /enable_agx_arm std_srvs/srv/SetBool "{data: false}"
+  ros2 service call /enable_agx_arm std_srvs/srv/SetBool "{data: true}"
+
+-- 拖动示教 --
+  python3 tools/switch_to_can_control.py --robot piper_x --can can0
+  python3 tools/switch_to_can_control.py --robot piper_x --can can0 --zero
+
+-- 诊断 --
+  timeout 3 candump -n 20 can0
+  python3 tools/check_arm.py --robot piper_x
+  tail -f /tmp/agx_arm_moveit.log
+
+提示:
+  - MoveIt 面板里选 arm 组，拖动标记 -> Plan -> Execute
+  - 执行时控制门才打开；空闲时 /control/* 会被忽略

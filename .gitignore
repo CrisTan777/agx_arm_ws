@@ -1,0 +1,22 @@
+# colcon / ROS 2 编译产物
+build/
+install/
+log/
+
+# Python 缓存与打包产物
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+dist/
+
+# 编辑器 / 系统文件
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# 运行日志（源码目录内不应有，但兜底）
+*.log

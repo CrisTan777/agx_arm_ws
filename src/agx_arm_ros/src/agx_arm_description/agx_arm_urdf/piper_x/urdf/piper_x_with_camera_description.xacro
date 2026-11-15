@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  PiPER X 腕部相机组件（相机支架 + 松灵双目相机 DaBai DC1）
+
+  安装方式：支架固定在 AgxGripper 的 gripper_base 侧面，相机随夹爪一起运动
+  （eye-in-hand）。因此本文件必须在 piper_x_with_gripper_description.xacro
+  之后 include，gripper_base 已存在。
+
+  坐标系约定（camera_link）：
+    +X 指向相机镜头前方
+    +Y 沿相机长边（图像中的左右方向）
+    +Z 指向相机上方
+  原点位于相机前表面中心，机身向 -X 方向延伸 11.1 mm。
+
+  外形依据用户实物照片：
+    - 圆角梯形银色外壳，上宽下窄（59.6 mm 总宽，17.4 mm 高，11.1 mm 厚）
+    - 深色前面板内嵌在银色边框内
+    - 前面从左到右：左 IR、RGB、中央大镜头（蓝色镀膜）、LDM/LDP 双窗模块、右 IR
+    - 双 IR 基线 40 mm，镜头位置 y = -20 / -10 / 0 / +10 / +20 mm
+  外壳和前面板用 STL 网格（dabai_housing.stl / dabai_front_panel.stl），
+  镜头仍用圆柱几何体，便于后续替换成官方 STEP/STL。
+
+  支架使用官方 agx_arm_sim 的 realsense_mid_stand.dae，已复制到
+  piper_x/meshes/dae/camera_stand.dae。若实物支架孔位不同，改 camera_stand_joint。
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="piper_x_camera">
+
+  <!-- 颜色 -->
+  <material name="dabai_silver">
+    <color rgba="0.72 0.73 0.75 1.0"/>
+  </material>
+  <material name="dabai_dark">
+    <color rgba="0.055 0.055 0.065 1.0"/>
+  </material>
+  <material name="dabai_black">
+    <color rgba="0.005 0.005 0.006 1.0"/>
+  </material>
+  <material name="dabai_lens">
+    <color rgba="0.02 0.65 0.85 1.0"/>
+  </material>
+  <material name="dabai_blue">
+    <color rgba="0.02 0.30 1.00 1.0"/>
+  </material>
+  <material name="dabai_gold">
+    <color rgba="1.00 0.78 0.02 1.0"/>
+  </material>
+
+  <!-- ==================== 相机支架 ==================== -->
+  <link name="camera_stand_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.20"/>
+      <inertia ixx="0.0002" ixy="0.0" ixz="0.0"
+               iyy="0.0002" iyz="0.0"
+                           izz="0.0001"/>
+    </inertial>
+    <!-- 官方 agx_arm_sim 的 realsense_mid_stand.dae，已复制到
+         piper_x/meshes/dae/camera_stand.dae -->
+    <visual>
+      <origin xyz="0 0 0" rpy="-1.57 0 1.57"/>
+      <geometry>
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper_x/meshes/dae/camera_stand.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="-1.57 0 1.57"/>
+      <geometry>
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper_x/meshes/dae/camera_stand.dae"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- 官方 PiPER X 支架安装位：gripper_base 侧面 -->
+  <joint name="camera_stand_joint" type="fixed">
+    <origin xyz="-0.034 -0.001 0.022" rpy="0 0 0"/>
+    <parent link="gripper_base"/>
+    <child link="camera_stand_link"/>
+  </joint>
+
+  <!-- ==================== 相机安装座 ==================== -->
+  <!--
+    沿用官方 RealSense 支架的相机安装点：
+      xyz="-0.031 -0.028 0.0018" rpy="0 -1.22 0"
+    rpy 的 -1.22 rad 让相机光轴相对支架前倾约 20°，朝向夹爪前方。
+  -->
+  <link name="dabai_camera_mount_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.02"/>
+      <inertia ixx="1e-6" ixy="0.0" ixz="0.0"
+               iyy="1e-6" iyz="0.0"
+                           izz="1e-6"/>
+    </inertial>
+    <!-- 支架与相机之间的转接板 -->
+    <visual name="adapter_plate">
+      <origin xyz="-0.001 0 0.0125" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.003 0.062 0.020"/>
+      </geometry>
+      <material name="dabai_silver"/>
+    </visual>
+    <collision>
+      <origin xyz="-0.001 0 0.0125" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.003 0.062 0.020"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="dabai_camera_mount_joint" type="fixed">
+    <origin xyz="-0.031 -0.028 0.0018" rpy="0 -1.22 0"/>
+    <parent link="camera_stand_link"/>
+    <child link="dabai_camera_mount_link"/>
+  </joint>
+
+  <!-- ==================== DaBai DC1 相机本体 ==================== -->
+  <link name="camera_link">
+    <inertial>
+      <origin xyz="-0.00555 0 0" rpy="0 0 0"/>
+      <mass value="0.017"/>
+      <!-- 17 g，59.6 x 17.4 x 11.1 mm 长方体近似 -->
+      <inertia ixx="5.46e-6" ixy="0.0" ixz="0.0"
+               iyy="6.04e-7" iyz="0.0"
+                           izz="5.21e-6"/>
+    </inertial>
+
+    <!-- 银色圆角梯形外壳：前表面在 x=0，向后 11.1 mm -->
+    <visual name="housing">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper_x/meshes/dabai_housing.stl"/>
+      </geometry>
+      <material name="dabai_silver"/>
+    </visual>
+
+    <!-- 深色前面板，内嵌在银色边框内 -->
+    <visual name="front_panel">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://agx_arm_description/agx_arm_urdf/piper_x/meshes/dabai_front_panel.stl"/>
+      </geometry>
+      <material name="dabai_dark"/>
+    </visual>
+
+    <!-- 前面板背衬：即使 STL 面板在某些渲染器里被背面剔除，也能保证前面是深色 -->
+    <visual name="front_panel_backing">
+      <origin xyz="-0.0028 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0010 0.0450 0.0115"/>
+      </geometry>
+      <material name="dabai_dark"/>
+    </visual>
+
+    <!-- 顶部银色圆角横条（照片中明显的上沿） -->
+    <visual name="top_cap">
+      <origin xyz="-0.00555 0 0.0061" rpy="1.5707963 0 0"/>
+      <geometry>
+        <cylinder radius="0.0026" length="0.0586"/>
+      </geometry>
+      <material name="dabai_silver"/>
+    </visual>
+
+    <!-- 左 IR 相机（y = -20 mm） -->
+    <visual name="ir_left_ring">
+      <origin xyz="-0.0006 -0.020 0" rpy="0 1.5707963 0"/>
+      <geometry>
+        <cylinder radius="0.0055" length="0.0008"/>
+      </geometry>
+      <material name="dabai_silver"/>
+    </visual>
+    <visual name="ir_left_lens">
+      <origin xyz="-0.00055 -0.020 0" rpy="0 1.5707963 0"/>
+      <geometry>
+        <cylinder radius="0.0046" length="0.0010"/>
+      </geometry>
+      <material name="dabai_black"/>
+    </visual>
+    <visual name="ir_left_glass">
+      <origin xyz="-0.0007 -0.020 0" rpy="0 1.5707963 0"/>
+      <geometry>
+        <cylinder radius="0.0030" length="0.0006"/>
+      </geometry>
+      <material name="dabai_lens"/>
+    </visual>
+
+    <!-- RGB 相机（y = -10 mm） -->
+    <visual name="rgb_ring">
+      <origin xyz="-0.0006 -0.010 0" rpy="0 1.5707963 0"/>
+      <geometry>
+        <cylinder radius="0.0040" length="0.0006"/>
+      </geometry>
+      <material name="dabai_dark"/>
+    </visual>
+    <visual name="rgb_lens">
+      <origin xyz="-0.00055 -0.010 0" rpy="0 1.5707963 0"/>
+      <geometry>
+        <cylinder radius="0.0033" length="0.0008"/>
+      </geometry>
+      <material name="dabai_black"/>
+    </visual>
+    <visual name="rgb_glass">
+      <origin xyz="-0.0007 -0.010 0" rpy="0 1.5707963 0"/>
+      <geometry>
+        <cylinder radius="0.0023" length="0.0006"/>
+      </geometry>
+      <material name="dabai_blue"/>
+    </visual>
+
+    <!-- 中央大镜头（y = 0，照片中蓝色镀膜） -->
+    <visual name="center_ring">
+      <origin xyz="-0.0006 0 0" rpy="0 1.5707963 0"/>
+      <geometry>
+        <cylinder radius="0.0056" length="0.0008"/>
+      </geometry>
+      <material name="dabai_silver"/>
+    </visual>
+    <visual name="center_lens">
+      <origin xyz="-0.00055 0 0" rpy="0 1.5707963 0"/>
+      <geometry>
+        <cylinder radius="0.0048" length="0.0010"/>
+      </geometry>
+      <material name="dabai_black"/>
+    </visual>
+    <visual name="center_glass">
+      <origin xyz="-0.0007 0 0" rpy="0 1.5707963 0"/>
+      <geometry>
+        <cylinder radius="0.0036" length="0.0006"/>
+      </geometry>
+      <material name="dabai_blue"/>
+    </visual>
+
+    <!-- LDM / LDP 双窗模块（y = +10 mm） -->
+    <visual name="ldm_ldp_module">
+      <origin xyz="-0.0006 0.010 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0014 0.0080 0.0120"/>
+      </geometry>
+      <material name="dabai_dark"/>
+    </visual>
+    <visual name="ldm_window">
+      <origin xyz="0.0004 0.010 0.0026" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0005 0.0040 0.0030"/>
+      </geometry>
+      <material name="dabai_gold"/>
+    </visual>
+    <visual name="ldp_window">
+      <origin xyz="0.0004 0.010 -0.0026" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0005 0.0040 0.0030"/>
+      </geometry>
+      <material name="dabai_blue"/>
+    </visual>
+
+    <!-- 右 IR 相机（y = +20 mm） -->
+    <visual name="ir_right_ring">
+      <origin xyz="-0.0006 0.020 0" rpy="0 1.5707963 0"/>
+      <geometry>
+        <cylinder radius="0.0055" length="0.0008"/>
+      </geometry>
+      <material name="dabai_silver"/>
+    </visual>
+    <visual name="ir_right_lens">
+      <origin xyz="-0.00055 0.020 0" rpy="0 1.5707963 0"/>
+      <geometry>
+        <cylinder radius="0.0046" length="0.0010"/>
+      </geometry>
+      <material name="dabai_black"/>
+    </visual>
+    <visual name="ir_right_glass">
+      <origin xyz="-0.0007 0.020 0" rpy="0 1.5707963 0"/>
+      <geometry>
+        <cylinder radius="0.0030" length="0.0006"/>
+      </geometry>
+      <material name="dabai_lens"/>
+    </visual>
+
+    <!-- 背面 Micro USB 接口 -->
+    <visual name="usb_port">
+      <origin xyz="-0.0113 0 -0.002" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0010 0.0075 0.0030"/>
+      </geometry>
+      <material name="dabai_black"/>
+    </visual>
+
+    <!-- 碰撞体用外包围盒即可 -->
+    <collision>
+      <origin xyz="-0.00555 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0111 0.0596 0.0174"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="camera_joint" type="fixed">
+    <!-- 相机前表面中心相对安装座的偏移；+X 前、+Z 上 -->
+    <origin xyz="0.0106 0 0.0125" rpy="0 0 0"/>
+    <parent link="dabai_camera_mount_link"/>
+    <child link="camera_link"/>
+  </joint>
+
+</robot>
