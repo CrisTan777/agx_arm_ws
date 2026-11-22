@@ -45,7 +45,7 @@ agx_arm_ws/
 ```bash
 cd ~/jiangqi/learning_part/agx_arm_ws
 bash tools/setup_host.sh                 # 需要 sudo 密码
-source tools/env.sh
+source /opt/ros/jazzy/setup.bash
 colcon build --symlink-install --base-paths src
 ```
 
@@ -58,11 +58,12 @@ tmux attach -t agx_arm              # 已退出后重新进入
 tmux kill-session -t agx_arm        # 关闭工作台
 ```
 
-工作台包含三个窗口：
+默认工作台包含四个窗口：
 
 | 窗口 | 内容 |
 |---|---|
 | `moveit` | 驱动 + MoveIt + RViz，日志同时写入 `/tmp/agx_arm_moveit.log` |
+| `camera` | 采集 DaBai DC1 彩色画面，发布到 `/wrist_camera/image_raw` |
 | `shell`  | 已 `source tools/env.sh` 的命令窗口，启动时显示常用命令速查 |
 | `monitor`| 关节角、`ctrl_mode`/`arm_status`、TCP 位姿实时刷新 |
 
@@ -70,8 +71,8 @@ tmux kill-session -t agx_arm        # 关闭工作台
 启动 MoveIt → 若机械臂正常则自动使能（默认速度 10%、执行时才开控制门）。
 
 常用选项：`--no-enable`（不自动使能）、`--detach`（只创建不进入）、
-`--gripper`（装夹爪后使用，默认同时加载腕部 DaBai DC1 相机模型）、
-`--no-camera`（不加载相机模型）。
+`--no-camera`（保留夹爪，关闭腕部相机模型和取流）、
+`--no-gripper`（无夹爪，同时关闭腕部相机）。已有会话时用 `--restart` 应用新选项。
 
 > 如果预检检测到拖动示教模式，会拒绝自动使能并在 `moveit`/`shell` 窗口提示。
 > 处理顺序：
@@ -186,8 +187,9 @@ ros2 run piper_x_app moveit_demo gripper --width 0.0 --execute
 
 ## 腕部相机（DaBai DC1）
 
-本工作空间已加入 **松灵双目相机 DaBai DC1 + 腕部相机支架** 的模型，用于 RViz /
-MoveIt 可视化。当前只做 URDF 模型，暂未启动相机驱动。
+工作台默认加载 **AgxGripper + 腕部相机支架 + DaBai DC1** 的模型，并通过 USB UVC
+发布彩色画面。取流需要 `python3-opencv`（已包含在 `setup_host.sh` 的依赖列表中）。
+已配置过的机器如果缺少 OpenCV，只需运行 `sudo apt install python3-opencv`。
 
 | 项目 | 值 |
 |---|---|
@@ -204,13 +206,17 @@ MoveIt 可视化。当前只做 URDF 模型，暂未启动相机驱动。
 ros2 launch agx_arm_description display.launch.py \
   arm_type:=piper_x effector_type:=agx_gripper with_camera:=true
 
-# 真机 + MoveIt + 相机模型（推荐的 tmux 工作台）
-bash tools/start_tmux.sh --gripper              # 默认带相机模型
-bash tools/start_tmux.sh --gripper --no-camera  # 不加载相机模型
+# 真机反馈 + MoveIt + 相机模型和画面（不自动使能）
+bash tools/start_tmux.sh --restart --no-enable
+
+# 只采集相机，不启动机械臂；可用于单独启动 MoveIt 时提供画面
+source tools/env.sh
+python3 tools/wrist_camera.py
 ```
 
-在 RViz 左侧 `RobotModel` 中可以看到相机支架和相机；`camera_link` 的 **+X 指向镜头前方**。
-若只关心相机，可把 Fixed Frame 设为 `camera_link` 并放大。
+在 MoveIt 的 RViz 中，3D 机器人模型包含夹爪、支架和相机，`Wrist Camera` 面板显示实时彩色画面。
+`camera_link` 的 **+X 指向镜头前方**。模型中的彩色光学坐标系 `wrist_camera_color_optical_frame`
+是按外观模型放置的，未经外参标定。
 
 ### 说明
 
@@ -222,8 +228,9 @@ bash tools/start_tmux.sh --gripper --no-camera  # 不加载相机模型
   `xyz="-0.034 -0.001 0.022"`（相对 `gripper_base`）。实际支架孔位不同的话改这个
   `camera_stand_joint` 的 origin。
 - 相机约 17 g，支架约 0.2 kg，连同夹爪约 0.7 kg，仍在 PiPER X 1.5 kg 额定负载内。
-- 目前只做 URDF 可视化，没有启动相机驱动。后续接入 Orbbec SDK / `astra_camera` 时，
-  以 `camera_link` 为父坐标系发布深度/RGB 光学 frame 即可。
+- 默认按 `/dev/v4l/by-id` 查找 DaBai DC1 的彩色设备，不依赖 `/dev/videoN` 编号。
+  多台相机时，用 `AGX_CAMERA_DEVICE=/dev/v4l/by-id/<设备名> bash tools/start_tmux.sh --restart --no-enable`
+  指定其中一台。当前仅发布彩色图像，不发布深度、红外或标定数据。
 - `with_camera:=true` 只在 `arm_type:=piper_x` + `effector_type:=agx_gripper` 时生效。
 
 ## 拖动示教 ↔ CAN 控制（重要）
@@ -326,3 +333,5 @@ ros2 run tf2_ros tf2_echo base_link camera_link                   # 应输出平
 
   如果仍看不到，在 RViz 的 `RobotModel` 里展开 `Links`，确认 `camera_link` /
   `camera_stand_link` 的 `Value` 是勾选状态。
+- **`Wrist Camera` 面板没有画面**：在 tmux 的 `camera` 窗口查看 USB、权限或设备占用错误；
+  在 `shell` 窗口运行 `ros2 topic hz /wrist_camera/image_raw` 检查是否收到图像。

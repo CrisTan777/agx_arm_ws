@@ -2,11 +2,11 @@
 # 一键启动 tmux 工作台：MoveIt/RViz + 命令窗口 + 实时监控
 #
 # 用法:
-#   bash tools/start_tmux.sh              # 启动并进入
+#   bash tools/start_tmux.sh              # 启动并进入（夹爪 + DaBai DC1）
 #   bash tools/start_tmux.sh --restart    # 重启整个工作台
 #   bash tools/start_tmux.sh --no-enable  # 不自动使能机械臂
-#   bash tools/start_tmux.sh --gripper    # 已装夹爪 + 腕部相机模型
-#   bash tools/start_tmux.sh --no-camera  # 不加载腕部 DaBai DC1 模型
+#   bash tools/start_tmux.sh --no-gripper # 无夹爪（同时关闭腕部相机）
+#   bash tools/start_tmux.sh --no-camera  # 保留夹爪，不加载相机模型和画面
 #   bash tools/start_tmux.sh --detach     # 只创建会话，不自动进入
 set -euo pipefail
 
@@ -15,7 +15,7 @@ SESSION=agx_arm
 RESTART=0
 DETACH=0
 ENABLE=1
-EFFECTOR=none
+EFFECTOR=gripper
 CAMERA_FLAG=""
 
 usage() {
@@ -28,6 +28,7 @@ while [[ $# -gt 0 ]]; do
         --detach) DETACH=1 ;;
         --no-enable) ENABLE=0 ;;
         --gripper) EFFECTOR=gripper ;;
+        --no-gripper) EFFECTOR=none ;;
         --camera) CAMERA_FLAG="--camera" ;;
         --no-camera) CAMERA_FLAG="--no-camera" ;;
         --session) SESSION="${2:?--session 需要名称}"; shift ;;
@@ -36,6 +37,11 @@ while [[ $# -gt 0 ]]; do
     esac
     shift
 done
+
+if [[ "$EFFECTOR" == none && "$CAMERA_FLAG" == --camera ]]; then
+    echo "腕部相机支架装在 AgxGripper 上，--camera 不能与 --no-gripper 一起使用。" >&2
+    exit 1
+fi
 
 attach_session() {
     if [[ -n "${TMUX:-}" ]]; then
@@ -120,6 +126,12 @@ tmux set-option -t "$SESSION" history-limit 20000
 tmux send-keys -t "$SESSION:moveit" \
     "bash tools/bringup_moveit.sh $EFFECTOR $ENABLE_FLAG $CAMERA_FLAG" C-m
 
+if [[ "$EFFECTOR" == gripper && "$CAMERA_FLAG" != --no-camera ]]; then
+    tmux new-window -t "$SESSION" -n camera -c "$WS" -e "AGX_CAMERA_DEVICE=${AGX_CAMERA_DEVICE:-}"
+    tmux send-keys -t "$SESSION:camera" \
+        "source tools/env.sh && python3 tools/wrist_camera.py" C-m
+fi
+
 tmux new-window -t "$SESSION" -n shell -c "$WS"
 tmux send-keys -t "$SESSION:shell" "source tools/env.sh" C-m
 tmux send-keys -t "$SESSION:shell" "cat tools/CHEATSHEET.txt" C-m
@@ -132,6 +144,9 @@ tmux select-window -t "$SESSION:moveit"
 
 echo "tmux 工作台已创建:"
 echo "  moveit  - 驱动 + MoveIt + RViz（日志同时写入 /tmp/agx_arm_moveit.log）"
+if [[ "$EFFECTOR" == gripper && "$CAMERA_FLAG" != --no-camera ]]; then
+    echo "  camera  - DaBai DC1 彩色画面发布到 /wrist_camera/image_raw"
+fi
 echo "  shell   - 已 source tools/env.sh 的命令窗口"
 echo "  monitor - 关节/状态实时监控"
 

@@ -300,4 +300,11 @@
     <child link="camera_link"/>
   </joint>
 
+  <link name="wrist_camera_color_optical_frame"/>
+  <joint name="wrist_camera_color_optical_joint" type="fixed">
+    <origin xyz="0 -0.010 0" rpy="-1.57079632679 0 -1.57079632679"/>
+    <parent link="camera_link"/>
+    <child link="wrist_camera_color_optical_frame"/>
+  </joint>
+
 </robot>

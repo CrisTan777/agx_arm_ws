@@ -99,23 +99,33 @@ def _build_ros2_controllers_file(arm_type, effector_type, revo2_type, namespace)
     return tmp.name
 
 
-def _build_namespaced_moveit_rviz_config(package_path, namespace):
-    """Generate a temporary RViz config with namespace-specific MoveGroup target."""
+def _build_namespaced_moveit_rviz_config(package_path, namespace, show_wrist_camera):
+    """Generate the MoveIt RViz config for this namespace and hardware profile."""
     base_rviz = package_path / "config/moveit.rviz"
-    content = base_rviz.read_text(encoding="utf-8")
-
+    config = yaml.safe_load(base_rviz.read_text(encoding="utf-8"))
+    displays = config["Visualization Manager"]["Displays"]
     ns = namespace.strip("/")
     move_group_ns = f"/{ns}" if ns else ""
+    for display in displays:
+        if display["Class"] == "moveit_rviz_plugin/MotionPlanning":
+            display["Move Group Namespace"] = move_group_ns
 
-    content = content.replace(
-        'Move Group Namespace: ""',
-        f'Move Group Namespace: "{move_group_ns}"',
-    )
+    if show_wrist_camera:
+        displays.append({
+            "Class": "rviz_default_plugins/Image",
+            "Name": "Wrist Camera",
+            "Enabled": True,
+            "Topic": {
+                "Value": f"{move_group_ns}/wrist_camera/image_raw",
+                "Reliability Policy": "Best Effort",
+            },
+            "Value": True,
+        })
 
     tmp = tempfile.NamedTemporaryFile(
         mode="w", suffix=".rviz", prefix="moveit_", delete=False
     )
-    tmp.write(content)
+    yaml.safe_dump(config, tmp, sort_keys=False)
     tmp.close()
     return tmp.name
 
@@ -125,6 +135,11 @@ def _build_moveit(context):
     arm_type = LaunchConfiguration("arm_type").perform(context)
     effector_type = LaunchConfiguration("effector_type").perform(context)
     revo2_type = LaunchConfiguration("revo2_type").perform(context)
+    show_wrist_camera = (
+        arm_type == "piper_x"
+        and effector_type == "agx_gripper"
+        and LaunchConfiguration("with_camera").perform(context) == "true"
+    )
     moveit_config = build_moveit_config(context)
     package_path = moveit_config.package_path
 
@@ -179,7 +194,9 @@ def _build_moveit(context):
                 str(package_path / "launch/moveit_rviz.launch.py")
             ),
             launch_arguments={
-                "rviz_config": _build_namespaced_moveit_rviz_config(package_path, namespace),
+                "rviz_config": _build_namespaced_moveit_rviz_config(
+                    package_path, namespace, show_wrist_camera
+                ),
             }.items(),
             condition=IfCondition(LaunchConfiguration("use_rviz")),
         )

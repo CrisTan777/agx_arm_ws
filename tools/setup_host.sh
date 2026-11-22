@@ -11,6 +11,7 @@ echo "==> [1/4] 安装系统依赖 (apt)"
 sudo apt-get update
 sudo apt-get install -y \
   python3-pip \
+  python3-opencv \
   can-utils \
   ethtool \
   ros-jazzy-topic-tools

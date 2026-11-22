@@ -19,10 +19,9 @@
   # 只预览模型（不启动真机）
   ros2 launch agx_arm_description display.launch.py \
     arm_type:=piper_x effector_type:=agx_gripper with_camera:=true
-  # 工作台默认带相机；不装相机时加 --no-camera
-  bash tools/start_tmux.sh --gripper
-  bash tools/start_tmux.sh --gripper --no-camera
-  # 查看相机 frame
+  # 工作台默认带夹爪、相机模型和实时画面；不装相机时加 --no-camera
+  bash tools/start_tmux.sh --restart --no-enable
+  ros2 topic hz /wrist_camera/image_raw
   ros2 run tf2_ros tf2_echo base_link camera_link
 
 -- 安全 --
